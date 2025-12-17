@@ -1,0 +1,481 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  password      String
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts         Account[]
+  sessions         Session[]
+  workspaceMembers WorkspaceMember[]
+  comments         Comment[]
+  overrideLogs     OverrideLog[]
+  auditLogs        AuditLog[]
+
+  @@index([email])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+enum WorkspacePlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+model Workspace {
+  id        String        @id @default(cuid())
+  name      String
+  slug      String        @unique
+  plan      WorkspacePlan @default(FREE)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  members      WorkspaceMember[]
+  ideas        Idea[]
+  auditLogs    AuditLog[]
+  analyticsEvents AnalyticsEvent[]
+
+  @@index([slug])
+}
+
+enum WorkspaceRole {
+  OWNER
+  COLLABORATOR
+  VIEWER
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
+}
+
+enum FlowMode {
+  FAST
+  NORMAL
+  DETAILED
+}
+
+enum Persona {
+  SOLO_FOUNDER
+  CONSULTANT
+  INDIE_MAKER
+}
+
+model Idea {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  versions  IdeaVersion[]
+  comments  Comment[]
+
+  @@index([workspaceId])
+}
+
+enum VersionStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+}
+
+model IdeaVersion {
+  id              String        @id @default(cuid())
+  ideaId          String
+  versionNumber   Int
+  label           String?
+  flowMode        FlowMode      @default(NORMAL)
+  persona         Persona       @default(SOLO_FOUNDER)
+  status          VersionStatus @default(DRAFT)
+  isPivot         Boolean       @default(false)
+  completedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  idea               Idea                 @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  stepStates         StepState[]
+  intakeData         IntakeData?
+  marketData         MarketData?
+  icpData            ICPData?
+  positioningData    PositioningData?
+  validationTests    ValidationTest[]
+  scoreRuns          ScoreRun[]
+  shareLinks         ShareLink[]
+  overrideLogs       OverrideLog[]
+  comments           Comment[]
+
+  @@unique([ideaId, versionNumber])
+  @@index([ideaId])
+}
+
+enum StepType {
+  INTAKE
+  MARKET
+  ICP
+  VALIDATION
+  POSITIONING
+  SUMMARY
+}
+
+model StepState {
+  id            String   @id @default(cuid())
+  versionId     String
+  step          StepType
+  isGatePassed  Boolean  @default(false)
+  isRequired    Boolean  @default(true)
+  lastUpdated   DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  version IdeaVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@unique([versionId, step])
+  @@index([versionId])
+}
+
+model IntakeData {
+  id                    String   @id @default(cuid())
+  versionId             String   @unique
+  problemStatement      String
+  targetCustomer        String?
+  currentSolution       String?
+  proposedSolution      String?
+  uniqueValue           String?
+  assumptions           String[]
+  riskFactors           String[]
+  founderExperience     String?
+  domainExpertise       String?
+  relevantSkills        String[]
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  version IdeaVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([versionId])
+}
+
+model MarketData {
+  id                String   @id @default(cuid())
+  versionId         String   @unique
+  totalAddressableMarket String?
+  serviceableMarket String?
+  targetMarket      String?
+  marketTrends      String?
+  regulatoryFactors String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  version     IdeaVersion     @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  competitors Competitor[]
+  segments    MarketSegment[]
+
+  @@index([versionId])
+}
+
+model Competitor {
+  id           String  @id @default(cuid())
+  marketDataId String
+  name         String
+  description  String?
+  strengths    String[]
+  weaknesses   String[]
+  marketShare  String?
+  pricing      String?
+  url          String?
+
+  marketData MarketData @relation(fields: [marketDataId], references: [id], onDelete: Cascade)
+
+  @@index([marketDataId])
+}
+
+model MarketSegment {
+  id           String  @id @default(cuid())
+  marketDataId String
+  name         String
+  size         String?
+  growth       String?
+  characteristics String[]
+
+  marketData MarketData @relation(fields: [marketDataId], references: [id], onDelete: Cascade)
+
+  @@index([marketDataId])
+}
+
+model ICPData {
+  id                  String   @id @default(cuid())
+  versionId           String   @unique
+  demographics        String?
+  psychographics      String?
+  painPoints          String[]
+  goals               String[]
+  currentBehaviors    String[]
+  buyingProcess       String?
+  decisionCriteria    String[]
+  budgetRange         String?
+  preferredChannels   String[]
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  version          IdeaVersion        @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  validationTests  ValidationTest[]
+
+  @@index([versionId])
+}
+
+enum ValidationTestType {
+  LANDING_PAGE
+  SURVEY
+  INTERVIEW
+  MVP
+  AD_CAMPAIGN
+  WAITLIST
+  PROTOTYPE_TEST
+  OTHER
+}
+
+model ValidationTest {
+  id             String              @id @default(cuid())
+  versionId      String
+  icpDataId      String?
+  type           ValidationTestType
+  hypothesis     String
+  channel        String?
+  sampleSize     Int?
+  successMetric  String?
+  actualOutcome  String?
+  notes          String?
+  externalLinks  String[]
+  isHardSignal   Boolean             @default(false)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  version     IdeaVersion           @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  icpData     ICPData?              @relation(fields: [icpDataId], references: [id], onDelete: SetNull)
+  attachments EvidenceAttachment[]
+
+  @@index([versionId])
+  @@index([icpDataId])
+}
+
+model EvidenceAttachment {
+  id                 String   @id @default(cuid())
+  validationTestId   String
+  fileName           String
+  fileUrl            String
+  fileType           String?
+  description        String?
+  createdAt          DateTime @default(now())
+
+  validationTest ValidationTest @relation(fields: [validationTestId], references: [id], onDelete: Cascade)
+
+  @@index([validationTestId])
+}
+
+model PositioningData {
+  id                String   @id @default(cuid())
+  versionId         String   @unique
+  tagline           String?
+  valueProposition  String?
+  differentiators   String[]
+  targetSegment     String?
+  messagingFramework String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  version IdeaVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([versionId])
+}
+
+enum ConfidenceLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum Recommendation {
+  GO
+  CONDITIONAL_GO
+  NO_GO
+}
+
+model ScoreRun {
+  id                    String           @id @default(cuid())
+  versionId             String
+  totalScore            Float
+  confidence            ConfidenceLevel
+  recommendation        Recommendation
+  problemClarityScore   Float
+  icpClarityScore       Float
+  marketSaturationScore Float
+  demandSignalsScore    Float
+  founderMarketFitScore Float
+  evidenceCompletenessScore Float
+  explanationJson       Json
+  inputsSnapshot        Json
+  createdAt             DateTime         @default(now())
+
+  version IdeaVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([versionId])
+  @@index([createdAt])
+}
+
+model OverrideLog {
+  id             String   @id @default(cuid())
+  versionId      String
+  userId         String
+  warningType    String
+  reason         String
+  acknowledgedAt DateTime @default(now())
+
+  version IdeaVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([versionId])
+  @@index([userId])
+}
+
+enum ArtifactType {
+  PROBLEM_BRIEF
+  MARKET_SNAPSHOT
+  ICP_MAP
+  VALIDATION_LOG
+  POSITIONING_PAGE
+  FINAL_MEMO
+}
+
+model ShareLink {
+  id           String       @id @default(cuid())
+  versionId    String
+  token        String       @unique
+  artifactType ArtifactType
+  passwordHash String?
+  expiresAt    DateTime?
+  isActive     Boolean      @default(true)
+  permissions  String       @default("read")
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  version IdeaVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([versionId])
+  @@index([token])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  versionId String?
+  ideaId    String?
+  userId    String
+  section   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  version IdeaVersion? @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  idea    Idea?        @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([versionId])
+  @@index([ideaId])
+  @@index([userId])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  action      String
+  entityType  String?
+  entityId    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model AnalyticsEvent {
+  id          String   @id @default(cuid())
+  workspaceId String
+  eventName   String
+  eventData   Json?
+  userId      String?
+  sessionId   String?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([eventName])
+  @@index([createdAt])
+  @@index([userId])
+}
