@@ -50,7 +50,7 @@ export default async function IdeaPage({ params }: { params: Promise<{ ideaId: s
           <div>
             <h2 className="text-xl font-semibold mb-4">Versions</h2>
             <div className="space-y-4">
-              {idea.versions.map((version) => (
+              {idea.versions.map((version: typeof idea.versions[number]) => (
                 <Card key={version.id}>
                   <CardHeader>
                     <div className="flex justify-between items-start">
